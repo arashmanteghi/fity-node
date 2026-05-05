@@ -1,0 +1,19 @@
+# Dependencies — installed fresh inside Docker
+node_modules/
+
+# TypeScript build output — compiled fresh inside Docker
+dist/
+
+# Environment & secrets
+.env
+.env.local
+.env.*.local
+
+# Git
+.git/
+.gitignore
+
+# Docs & config not needed in the container
+*.md
+.nvmrc
+fly.toml

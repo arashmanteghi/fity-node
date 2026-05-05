@@ -4,11 +4,57 @@ Express backend for the Fity Downloader — fetches video metadata and streams d
 
 ## Tech Stack
 
-- **Node.js 22.19.0** + **Express 4**
+- **Node.js 22.19.0** + **Express 4** + **TypeScript 5**
 - **yt-dlp** (system binary) for video extraction
 - **Helmet** + **CORS** for security
 
-## Prerequisites
+## Production
+
+| | |
+|---|---|
+| **Platform** | [Fly.io](https://fly.io) |
+| **URL** | https://fity-node-sparkling-firefly-5762.fly.dev |
+| **App name** | `fity-node-sparkling-firefly-5762` |
+| **Region** | `arn` (Stockholm) |
+
+### Useful commands
+
+```bash
+fly status --app fity-node-sparkling-firefly-5762      # check machine status
+fly logs --app fity-node-sparkling-firefly-5762        # tail live logs
+fly deploy                                              # redeploy after changes
+fly secrets set "KEY=value" --app fity-node-sparkling-firefly-5762  # update env vars
+```
+
+### First-time deployment steps
+
+These are the exact commands used to deploy the app for the first time:
+
+```bash
+brew install flyctl                          # install Fly CLI
+fly auth login                               # authenticate with Fly.io
+fly launch --no-deploy                       # create the app and generate fly.toml
+fly secrets set "ALLOWED_ORIGINS=*"          # allow all origins before frontend is live
+fly deploy                                   # build Docker image and deploy
+```
+
+After the frontend was deployed on Vercel, the CORS origin was locked down:
+
+```bash
+fly secrets set "ALLOWED_ORIGINS=https://your-frontend.vercel.app" --app fity-node-sparkling-firefly-5762
+```
+
+### Redeploy
+
+```bash
+fly deploy
+```
+
+Fly.io builds the Docker image remotely using the multi-stage `Dockerfile` (TypeScript compiled in build stage, only `dist/` copied to runtime image).
+
+---
+
+## Prerequisites (local development)
 
 - Node.js `22.19.0` (use `nvm use` to switch automatically)
 - `yt-dlp` installed on the system:
@@ -36,25 +82,36 @@ Server runs at `http://localhost:3000`.
 | `ALLOWED_ORIGINS` | `*` | Comma-separated CORS origins |
 | `YTDLP_BIN` | `yt-dlp` | Path to the yt-dlp binary |
 
+On Fly.io, secrets are managed via:
+```bash
+fly secrets set "ALLOWED_ORIGINS=https://your-frontend.vercel.app" --app fity-node-sparkling-firefly-5762
+```
+
 ## Available Scripts
 
 ```bash
-npm run dev     # Start with nodemon (auto-restart on file changes)
-npm start       # Start in production mode
+npm run dev        # tsx watch — run TypeScript directly with hot reload
+npm run build      # tsc — compile TypeScript to dist/
+npm run typecheck  # tsc --noEmit — type check without building
+npm start          # node dist/index.js — run compiled output
 ```
 
 ## Project Structure
 
 ```
 src/
-├── index.js              # Express app setup — helmet, CORS, yt-dlp check, port binding
+├── index.ts              # Express app setup — helmet, CORS, yt-dlp check, port binding
+├── types/
+│   └── video.ts          # Shared types — VideoInfo, VideoFormat, YtDlpInfo, YtDlpFormat
 ├── routes/
-│   └── video.js          # Route handlers and input validation
+│   └── video.ts          # Route handlers and input validation
 └── services/
-    └── ytdlp.js          # All yt-dlp subprocess calls
+    └── ytdlp.ts          # All yt-dlp subprocess calls
 ```
 
 ## API Reference
+
+Base URL (production): `https://fity-node-sparkling-firefly-5762.fly.dev`
 
 ### `GET /health`
 Returns server status.
@@ -129,7 +186,20 @@ GET /api/video/stream?url=https://www.youtube.com/watch?v=dQw4w9WgXcQ&format=bes
 **Notes**
 - `format=best` lets yt-dlp automatically pick the best available quality
 - To merge a video-only format with audio (e.g. `137+140`), encode the `+` as `%2B` in the URL
-- Merging video+audio formats requires `ffmpeg` installed on the server
+- Merging video+audio formats requires `ffmpeg` installed on the server (included in the Docker image)
+
+## Deployment
+
+The app is containerised. The `Dockerfile` uses a multi-stage build:
+
+1. **Build stage** — installs all deps, compiles TypeScript → `dist/`
+2. **Runtime stage** — installs only production deps + `yt-dlp` + `ffmpeg`, copies `dist/`
+
+To deploy a new version:
+
+```bash
+fly deploy
+```
 
 ## Supported Platforms
 
